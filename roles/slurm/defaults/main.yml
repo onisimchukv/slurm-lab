@@ -1,0 +1,49 @@
+---
+slurm_cluster_name: lab
+slurm_controller_host: "{{ groups['slurm_controller'][0] }}"
+slurm_is_controller: "{{ inventory_hostname == slurm_controller_host }}"
+slurm_is_compute: "{{ inventory_hostname in groups['slurm_compute'] }}"
+
+# Fixed IDs so every node agrees on ownership of keys, spool and log files
+slurm_uid: 981
+slurm_gid: 981
+slurm_munge_uid: 982
+slurm_munge_gid: 982
+
+# Packages (EPEL 9). Names can differ slightly between releases: `dnf search slurm`
+slurm_packages_common: [munge, chrony, nfs-utils, slurm]
+slurm_packages_controller: [slurm-slurmctld, slurm-slurmdbd, mariadb-server]
+slurm_packages_compute: [slurm-slurmd]
+
+# Node sizing and GPUs
+slurm_node_cpus: 4
+slurm_node_memory_mb: 6000
+slurm_gpu_count: 0
+slurm_gpu_simulated: true
+
+# Scheduling policy
+slurm_partitions:
+  - { name: debug, default: true, max_time: "01:00:00" }
+slurm_priority_decay_half_life: "7-0"
+slurm_priority_weight_fairshare: 10000
+slurm_priority_weight_age: 1000
+slurm_priority_weight_qos: 2000
+
+# Accounting database
+slurm_db_name: slurm_acct_db
+slurm_db_user: slurm
+slurm_db_password: ""
+slurm_db_buffer_pool_size: 512M
+
+# Accounting content
+slurm_accounts: []
+slurm_qos: []
+slurm_users: []
+
+# Shared filesystem: exported by the controller, mounted on compute nodes
+slurm_shared_dir: /shared
+
+# Host and security settings
+slurm_manage_hosts_file: true
+slurm_selinux_mode: permissive # lab simplification; see README
+slurm_firewall_trusted_cidr: "" # e.g. 192.168.1.0/24 to trust the lab network in firewalld

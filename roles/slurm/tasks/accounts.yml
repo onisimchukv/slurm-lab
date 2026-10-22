@@ -1,0 +1,34 @@
+---
+# Create the service accounts with fixed IDs BEFORE the packages, so the
+# files each package ships are owned identically on every node.
+- name: Create slurm group
+  ansible.builtin.group:
+    name: slurm
+    gid: "{{ slurm_gid }}"
+    system: true
+
+- name: Create slurm user
+  ansible.builtin.user:
+    name: slurm
+    uid: "{{ slurm_uid }}"
+    group: slurm
+    system: true
+    shell: /sbin/nologin
+    home: /var/lib/slurm
+    create_home: false
+
+- name: Create munge group
+  ansible.builtin.group:
+    name: munge
+    gid: "{{ slurm_munge_gid }}"
+    system: true
+
+- name: Create munge user
+  ansible.builtin.user:
+    name: munge
+    uid: "{{ slurm_munge_uid }}"
+    group: munge
+    system: true
+    shell: /sbin/nologin
+    home: /var/lib/munge
+    create_home: false

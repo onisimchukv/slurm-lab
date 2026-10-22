@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{% if slurm_gpu_simulated | bool %}
+# Simulated GPUs: a countable resource with no device files behind it.
+{% for n in groups['slurm_compute'] %}
+NodeName={{ n }} Name=gpu Count={{ slurm_gpu_count }}
+{% endfor %}
+{% else %}
+# Real NVIDIA GPUs: requires a Slurm build with NVML support.
+AutoDetect=nvml
+{% endif %}

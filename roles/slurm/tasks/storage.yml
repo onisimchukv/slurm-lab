@@ -1,0 +1,67 @@
+---
+- name: Create test users with identical UIDs on every node
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    uid: "{{ item.uid }}"
+    shell: /bin/bash
+    password: "!"
+    state: present
+  loop: "{{ slurm_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the shared directory
+  ansible.builtin.file:
+    path: "{{ slurm_shared_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Export the shared directory from the controller
+  when: slurm_is_controller | bool
+  block:
+    - name: Write NFS export
+      ansible.builtin.copy:
+        dest: /etc/exports.d/slurm-shared.exports
+        content: |
+          {{ slurm_shared_dir }} {% for h in groups['slurm_compute'] %}{{ h }}(rw,sync,no_subtree_check) {% endfor %}
+
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Re-export NFS
+
+    - name: Start NFS server
+      ansible.builtin.service:
+        name: nfs-server
+        state: started
+        enabled: true
+
+    - name: Create a working directory per test user
+      ansible.builtin.file:
+        path: "{{ slurm_shared_dir }}/{{ item.name }}"
+        state: directory
+        owner: "{{ item.name }}"
+        group: "{{ item.name }}"
+        mode: "0750"
+      loop: "{{ slurm_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Install example job scripts
+      ansible.builtin.copy:
+        src: examples/
+        dest: "{{ slurm_shared_dir }}/examples/"
+        owner: root
+        group: root
+        mode: "0755"
+
+- name: Mount the shared directory on compute nodes
+  ansible.posix.mount:
+    path: "{{ slurm_shared_dir }}"
+    src: "{{ slurm_controller_host }}:{{ slurm_shared_dir }}"
+    fstype: nfs
+    opts: defaults,_netdev
+    state: mounted
+  when: slurm_is_compute | bool and not (slurm_is_controller | bool)

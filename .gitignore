@@ -1,0 +1,14 @@
+# Ansible
+*.retry
+*.vault_pass*
+group_vars/**/vault.yml
+!group_vars/**/vault.yml.example
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

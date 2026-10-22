@@ -1,0 +1,61 @@
+---
+- name: Set hostname to the inventory name (Slurm node names must match)
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add lab hosts to /etc/hosts
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} ANSIBLE SLURM LAB HOSTS"
+    block: |
+      {% for h in groups['slurm_controller'] + groups['slurm_compute'] %}
+      {{ hostvars[h].ansible_host }} {{ h }}
+      {% endfor %}
+  when: slurm_manage_hosts_file | bool
+
+- name: Set SELinux mode
+  ansible.posix.selinux:
+    policy: targeted
+    state: "{{ slurm_selinux_mode }}"
+  when: ansible_facts.selinux.status | default('disabled') != 'disabled'
+
+- name: Enable EPEL
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+
+- name: List enabled repositories
+  ansible.builtin.command: dnf repolist --enabled
+  register: slurm_repolist
+  changed_when: false
+
+- name: Enable CRB repository (needed by some EPEL dependencies)
+  ansible.builtin.command: dnf config-manager --set-enabled crb
+  when: "'crb' not in slurm_repolist.stdout"
+  changed_when: true
+
+- name: Install chrony and enable time sync (munge rejects credentials when clocks drift)
+  ansible.builtin.dnf:
+    name: chrony
+    state: present
+
+- name: Start chronyd
+  ansible.builtin.service:
+    name: chronyd
+    state: started
+    enabled: true
+
+- name: Gather service facts for the firewall check
+  ansible.builtin.service_facts:
+
+- name: Trust the lab network in firewalld
+  ansible.posix.firewalld:
+    source: "{{ slurm_firewall_trusted_cidr }}"
+    zone: trusted
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - slurm_firewall_trusted_cidr | length > 0
+    - ansible_facts.services['firewalld.service'] is defined
+    - ansible_facts.services['firewalld.service'].state == 'running'

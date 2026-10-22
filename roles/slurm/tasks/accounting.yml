@@ -1,0 +1,66 @@
+---
+# Idempotent sacctmgr bootstrap: each task checks first and only creates what is missing.
+- name: Accounts, QoS and users
+  when: slurm_is_controller | bool
+  block:
+    - name: Ensure accounts exist
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -z "$(sacctmgr -n -P show account name={{ item.name }} format=account)" ]; then
+          sacctmgr -i add account {{ item.name }} Description="{{ item.description }}" Organization="{{ item.name }}"
+          echo CREATED
+        fi
+      args:
+        executable: /bin/bash
+      register: slurm_account_result
+      changed_when: "'CREATED' in slurm_account_result.stdout"
+      loop: "{{ slurm_accounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Ensure QoS exist
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -z "$(sacctmgr -n -P show qos name={{ item.name }} format=name)" ]; then
+          sacctmgr -i add qos {{ item.name }} {{ item.options }}
+          echo CREATED
+        fi
+      args:
+        executable: /bin/bash
+      register: slurm_qos_result
+      changed_when: "'CREATED' in slurm_qos_result.stdout"
+      loop: "{{ slurm_qos }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Ensure users have associations
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -z "$(sacctmgr -n -P show assoc user={{ item.name }} format=user)" ]; then
+          sacctmgr -i add user {{ item.name }} account={{ item.account }} DefaultAccount={{ item.account }}
+          echo CREATED
+        fi
+      args:
+        executable: /bin/bash
+      register: slurm_user_result
+      changed_when: "'CREATED' in slurm_user_result.stdout"
+      loop: "{{ slurm_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Ensure users have the intended QoS list
+      ansible.builtin.shell: |
+        set -o pipefail
+        want="{{ item.qos | sort | join(',') }}"
+        have="$(sacctmgr -n -P show assoc user={{ item.name }} format=qos | head -1 | tr -d ' ')"
+        if [ "$have" != "$want" ]; then
+          sacctmgr -i modify user {{ item.name }} set qos="$want" defaultqos=normal
+          echo CREATED
+        fi
+      args:
+        executable: /bin/bash
+      register: slurm_userqos_result
+      changed_when: "'CREATED' in slurm_userqos_result.stdout"
+      loop: "{{ slurm_users }}"
+      loop_control:
+        label: "{{ item.name }}"

@@ -1,0 +1,45 @@
+---
+- name: Start accounting daemon and controller
+  when: slurm_is_controller | bool
+  block:
+    - name: Start slurmdbd
+      ansible.builtin.service:
+        name: slurmdbd
+        state: started
+        enabled: true
+
+    - name: Wait for slurmdbd to listen
+      ansible.builtin.wait_for:
+        port: 6819
+        timeout: 60
+
+    - name: Check whether the cluster is registered in accounting
+      ansible.builtin.command: sacctmgr -n -P show cluster name={{ slurm_cluster_name }} format=cluster
+      register: slurm_cluster_check
+      changed_when: false
+
+    - name: Register the cluster in accounting
+      ansible.builtin.command: sacctmgr -i add cluster {{ slurm_cluster_name }}
+      when: slurm_cluster_check.stdout | trim | length == 0
+      changed_when: true
+
+    - name: Start slurmctld
+      ansible.builtin.service:
+        name: slurmctld
+        state: started
+        enabled: true
+
+    - name: Wait for slurmctld to listen
+      ansible.builtin.wait_for:
+        port: 6817
+        timeout: 60
+
+- name: Start compute daemon
+  ansible.builtin.service:
+    name: slurmd
+    state: started
+    enabled: true
+  when: slurm_is_compute | bool
+
+- name: Apply any pending configuration changes before accounting
+  ansible.builtin.meta: flush_handlers

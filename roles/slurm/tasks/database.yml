@@ -1,0 +1,46 @@
+---
+- name: Accounting database on the controller
+  when: slurm_is_controller | bool
+  block:
+    - name: Tune InnoDB for slurmdbd
+      ansible.builtin.template:
+        src: slurm-innodb.cnf.j2
+        dest: /etc/my.cnf.d/slurm-innodb.cnf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart mariadb
+
+    - name: Start MariaDB
+      ansible.builtin.service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Apply InnoDB settings before the first data is written
+      ansible.builtin.meta: flush_handlers
+
+    # Plain mysql commands keep this role independent of the (currently shifting)
+    # MySQL/MariaDB Ansible collections. The login test makes it idempotent and
+    # also repairs the user if the password in the vault changes.
+    - name: Test whether the accounting user can already log in
+      ansible.builtin.command: mysql -u {{ slurm_db_user }} -h localhost {{ slurm_db_name }} -e "SELECT 1"
+      environment:
+        MYSQL_PWD: "{{ slurm_db_password }}"
+      register: slurm_db_login
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Create the accounting database and user
+      ansible.builtin.command: mysql -u root
+      args:
+        stdin: |
+          CREATE DATABASE IF NOT EXISTS `{{ slurm_db_name }}`;
+          CREATE USER IF NOT EXISTS '{{ slurm_db_user }}'@'localhost' IDENTIFIED BY '{{ slurm_db_password }}';
+          ALTER USER '{{ slurm_db_user }}'@'localhost' IDENTIFIED BY '{{ slurm_db_password }}';
+          GRANT ALL ON `{{ slurm_db_name }}`.* TO '{{ slurm_db_user }}'@'localhost';
+          FLUSH PRIVILEGES;
+      when: slurm_db_login.rc != 0
+      changed_when: true
+      no_log: true

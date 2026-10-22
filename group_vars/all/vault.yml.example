@@ -1,0 +1,4 @@
+---
+# cp vault.yml.example vault.yml
+# ansible-vault encrypt group_vars/all/vault.yml
+vault_slurm_db_password: "replace-with-a-long-random-password"

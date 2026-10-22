@@ -1,0 +1,17 @@
+---
+- name: Install common packages
+  ansible.builtin.dnf:
+    name: "{{ slurm_packages_common }}"
+    state: present
+
+- name: Install controller packages
+  ansible.builtin.dnf:
+    name: "{{ slurm_packages_controller }}"
+    state: present
+  when: slurm_is_controller | bool
+
+- name: Install compute packages
+  ansible.builtin.dnf:
+    name: "{{ slurm_packages_compute }}"
+    state: present
+  when: slurm_is_compute | bool

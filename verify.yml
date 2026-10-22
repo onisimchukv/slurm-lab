@@ -1,0 +1,67 @@
+---
+- name: Verify the Slurm lab
+  hosts: slurm_controller
+  become: true
+  gather_facts: false
+  vars:
+    compute_count: "{{ groups['slurm_compute'] | length }}"
+    test_dir: /shared/alice
+  tasks:
+    - name: Controller answers
+      ansible.builtin.command: scontrol ping
+      register: ping
+      changed_when: false
+      failed_when: "'UP' not in ping.stdout"
+
+    - name: Wait for all compute nodes to be idle
+      ansible.builtin.command: sinfo -h -N -t idle -o '%N'
+      register: idle_nodes
+      until: idle_nodes.stdout_lines | length == (compute_count | int)
+      retries: 12
+      delay: 10
+      changed_when: false
+
+    - name: Run hostname on every node as alice
+      ansible.builtin.command: >-
+        sudo -u alice srun -N {{ compute_count }} -A physics -p debug hostname
+      args:
+        chdir: "{{ test_dir }}"
+      register: srun_all
+      changed_when: false
+      failed_when: srun_all.stdout_lines | unique | length != (compute_count | int)
+
+    - name: Run a job that requests one simulated GPU
+      ansible.builtin.command: >-
+        sudo -u alice srun -A physics -p gpu --qos=gpu_short --gres=gpu:1 hostname
+      args:
+        chdir: "{{ test_dir }}"
+      changed_when: false
+
+    - name: Run a small job array and wait for it
+      ansible.builtin.command: >-
+        sudo -u alice sbatch --wait -A physics -p debug --array=1-4 --output=/shared/alice/verify_%A_%a.out
+        --wrap='echo task $SLURM_ARRAY_TASK_ID on $(hostname)'
+      args:
+        chdir: "{{ test_dir }}"
+      changed_when: false
+
+    - name: Show accounting records for alice
+      ansible.builtin.command: sacct -u alice -X -n -o JobID,Partition,Account,QOS,AllocTRES%30,State
+      register: sacct_out
+      until: sacct_out.stdout_lines | length >= 3
+      retries: 6
+      delay: 5
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        var: sacct_out.stdout_lines
+
+    - name: Show the fair-share tree
+      ansible.builtin.command: sshare -a
+      register: sshare_out
+      changed_when: false
+
+    - name: Report fair-share
+      ansible.builtin.debug:
+        var: sshare_out.stdout_lines

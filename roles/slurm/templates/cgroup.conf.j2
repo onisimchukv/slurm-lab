@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+CgroupPlugin=autodetect
+ConstrainCores=yes
+ConstrainRAMSpace=yes
+{% if slurm_gpu_count | int > 0 and not (slurm_gpu_simulated | bool) %}
+ConstrainDevices=yes
+{% endif %}

@@ -1,0 +1,33 @@
+---
+ansible_managed: "Managed by Ansible (role: slurm). Local edits will be overwritten."
+
+slurm_cluster_name: lab
+
+# Compute node sizing: check with `slurmd -C` on a compute node and adjust.
+slurm_node_cpus: 4
+slurm_node_memory_mb: 6000
+
+# The lab VMs have no GPUs, so GPUs are simulated as a countable resource.
+# On real NVIDIA nodes set slurm_gpu_simulated: false (needs a Slurm build with NVML).
+slurm_gpu_count: 2
+slurm_gpu_simulated: true
+
+slurm_partitions:
+  - { name: debug, default: true, max_time: "01:00:00" }
+  - { name: long, max_time: "7-00:00:00" }
+  - { name: gpu, max_time: "2-00:00:00" }
+
+slurm_accounts:
+  - { name: physics, description: "Physics group" }
+  - { name: biomed, description: "Biomedical group" }
+
+slurm_qos:
+  - { name: gpu_short, options: "MaxWall=04:00:00 MaxTRESPerUser=gres/gpu=2 Priority=100" }
+
+# Test users, created with identical UIDs on every node.
+slurm_users:
+  - { name: alice, uid: 2001, account: physics, qos: [normal, gpu_short] }
+  - { name: bob, uid: 2002, account: biomed, qos: [normal] }
+
+# Slurm accounting database password comes from group_vars/all/vault.yml
+slurm_db_password: "{{ vault_slurm_db_password | default('') }}"

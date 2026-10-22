@@ -1,0 +1,48 @@
+---
+- name: Check required variables
+  ansible.builtin.assert:
+    that:
+      - groups['slurm_controller'] | length == 1
+      - groups['slurm_compute'] | length >= 1
+      - slurm_db_password | length >= 12
+    fail_msg: >-
+      Need exactly one host in slurm_controller, at least one in slurm_compute,
+      and vault_slurm_db_password of 12+ characters (see group_vars/all/vault.yml.example).
+    quiet: true
+  tags: [always]
+
+- name: Base system, repositories, time sync, hosts file, firewall
+  ansible.builtin.import_tasks: common.yml
+  tags: [common]
+
+- name: Slurm and munge system users
+  ansible.builtin.import_tasks: accounts.yml
+  tags: [common]
+
+- name: Packages
+  ansible.builtin.import_tasks: packages.yml
+  tags: [packages]
+
+- name: Munge authentication
+  ansible.builtin.import_tasks: munge.yml
+  tags: [munge]
+
+- name: Shared filesystem and test users
+  ansible.builtin.import_tasks: storage.yml
+  tags: [storage]
+
+- name: Accounting database
+  ansible.builtin.import_tasks: database.yml
+  tags: [database]
+
+- name: Slurm configuration files and directories
+  ansible.builtin.import_tasks: config.yml
+  tags: [config]
+
+- name: Start services
+  ansible.builtin.import_tasks: services.yml
+  tags: [services]
+
+- name: Accounts, QoS and users in the accounting database
+  ansible.builtin.import_tasks: accounting.yml
+  tags: [accounting]

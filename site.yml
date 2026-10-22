@@ -1,0 +1,6 @@
+---
+- name: Build the Slurm lab cluster
+  hosts: slurm_controller:slurm_compute
+  become: true
+  roles:
+    - role: slurm

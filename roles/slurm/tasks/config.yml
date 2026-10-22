@@ -1,0 +1,60 @@
+---
+- name: Create Slurm directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/slurm, owner: root, group: root, mode: "0755" }
+    - { path: /var/log/slurm, owner: slurm, group: slurm, mode: "0750" }
+    - { path: /var/spool/slurmctld, owner: slurm, group: slurm, mode: "0750" }
+    - { path: /var/spool/slurmd, owner: root, group: root, mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Deploy slurm.conf (identical on every node)
+  ansible.builtin.template:
+    src: slurm.conf.j2
+    dest: /etc/slurm/slurm.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart slurmctld
+    - Restart slurmd
+
+- name: Deploy cgroup.conf
+  ansible.builtin.template:
+    src: cgroup.conf.j2
+    dest: /etc/slurm/cgroup.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart slurmctld
+    - Restart slurmd
+
+- name: Deploy gres.conf
+  ansible.builtin.template:
+    src: gres.conf.j2
+    dest: /etc/slurm/gres.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: slurm_gpu_count | int > 0
+  notify:
+    - Restart slurmctld
+    - Restart slurmd
+
+- name: Deploy slurmdbd.conf (contains the database password)
+  ansible.builtin.template:
+    src: slurmdbd.conf.j2
+    dest: /etc/slurm/slurmdbd.conf
+    owner: slurm
+    group: slurm
+    mode: "0600"
+  when: slurm_is_controller | bool
+  no_log: true
+  notify: Restart slurmdbd
